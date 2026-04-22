@@ -66,8 +66,73 @@ exports.logout = async (req, res, next) => {
 // GET /api/auth/me
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).populate('assignedAdvisorId', 'name email employeeId storeLocation');
     res.json({ success: true, user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/auth/lis  — save quiz result to backend
+exports.saveLIS = async (req, res, next) => {
+  try {
+    const { score, profile, notifPref } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { lis: { score, profile, notifPref, lastUpdated: new Date() } },
+      { new: true }
+    );
+    res.json({ success: true, lis: user.lis });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/auth/lis/behavioral  — update behavioral score
+exports.updateBehavioral = async (req, res, next) => {
+  try {
+    const { delta } = req.body; // positive or negative
+    const user = await User.findById(req.user.id);
+    const newScore = Math.max(0, (user.lis?.behavioralScore || 0) + delta);
+    await User.findByIdAndUpdate(req.user.id, { 'lis.behavioralScore': newScore, 'lis.lastUpdated': new Date() });
+    res.json({ success: true, behavioralScore: newScore });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/auth/advisor/customers  — advisor gets their linked customers
+exports.getAdvisorCustomers = async (req, res, next) => {
+  try {
+    const advisor = await User.findById(req.user.id);
+    if (advisor.role !== 'advisor') {
+      return res.status(403).json({ success: false, message: 'Not an advisor' });
+    }
+    const customers = await User.find({ assignedAdvisorId: req.user.id })
+      .select('name email phone lis loyaltyPoints totalSpent createdAt');
+    res.json({ success: true, customers });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/auth/assign-advisor  — admin/advisor assigns a customer (advisor calls this)
+exports.assignCustomer = async (req, res, next) => {
+  try {
+    const { customerEmail } = req.body;
+    const advisor = await User.findById(req.user.id);
+    if (advisor.role !== 'advisor') {
+      return res.status(403).json({ success: false, message: 'Not an advisor' });
+    }
+    const customer = await User.findOne({ email: customerEmail, role: 'customer' });
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+    await User.findByIdAndUpdate(customer._id, { assignedAdvisorId: advisor._id });
+    if (!advisor.assignedCustomerIds.includes(customer._id)) {
+      await User.findByIdAndUpdate(advisor._id, { $push: { assignedCustomerIds: customer._id } });
+    }
+    res.json({ success: true, message: `${customer.name} assigned to ${advisor.name}` });
   } catch (error) {
     next(error);
   }

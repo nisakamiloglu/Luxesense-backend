@@ -9,6 +9,24 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['customer', 'advisor'], default: 'customer' },
   employeeId: { type: String },
   storeLocation: { type: String },
+
+  // Advisor ↔ Customer linking
+  assignedAdvisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // for customers
+  assignedCustomerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],             // for advisors
+
+  // LIS Algorithm data (persisted server-side)
+  lis: {
+    score:       { type: Number, default: 0 },
+    profile:     { type: String, enum: ['Premium', 'Selective', 'Occasional', 'Explorer'], default: 'Explorer' },
+    notifPref:   { type: String, enum: ['daily', 'weekly', 'monthly', 'rarely'], default: 'weekly' },
+    behavioralScore: { type: Number, default: 0 },
+    lastUpdated: { type: Date, default: Date.now },
+  },
+
+  // Loyalty
+  loyaltyPoints: { type: Number, default: 0 },
+  totalSpent:    { type: Number, default: 0 },
+
   createdAt: { type: Date, default: Date.now }
 });
 
